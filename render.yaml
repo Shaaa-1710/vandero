@@ -15,10 +15,10 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: CLOUDINARY_CLOUD_NAME
-        sync: false
+        value: none
       - key: CLOUDINARY_API_KEY
-        sync: false
+        value: none
       - key: CLOUDINARY_API_SECRET
-        sync: false
+        value: none
       - key: PYTHON_VERSION
         value: 3.11.0
