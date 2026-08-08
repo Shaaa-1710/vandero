@@ -10,7 +10,7 @@ try:
 except Exception as e:
     print(f"Database startup notice: {e}")
 
-app = FastAPI(title="Civic Pulse API (Production)")
+app = FastAPI(title="Civic Pulse API (PostgreSQL)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,4 +27,4 @@ app.include_router(admin.router)
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to Civic Pulse API (Production)"}
+    return {"message": "Welcome to Civic Pulse API (Neon PostgreSQL Connected)"}
