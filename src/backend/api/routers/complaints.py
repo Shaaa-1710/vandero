@@ -11,11 +11,48 @@ from services.cloudinary_service import upload_image
 
 router = APIRouter(prefix="/complaints", tags=["complaints"])
 
+def get_department_for_complaint(category: str, description: str, db: Session) -> Optional[int]:
+    """
+    Intelligently maps complaint category and description text to official municipal departments.
+    """
+    text = (category + " " + description).lower()
+    
+    if any(k in text for k in ["street light", "lighting", "lamp", "electrical", "electricity", "wire", "pole"]):
+        dept = db.query(Department).filter(
+            Department.name.ilike("%Street Lighting%") | Department.name.ilike("%Electricity%")
+        ).first()
+        if dept: return dept.id
+
+    if any(k in text for k in ["road", "pothole", "tar", "pavement", "highway", "street"]):
+        dept = db.query(Department).filter(Department.name.ilike("%Road%")).first()
+        if dept: return dept.id
+
+    if any(k in text for k in ["water", "pipe", "leak", "tap", "supply"]):
+        dept = db.query(Department).filter(Department.name.ilike("%Water%")).first()
+        if dept: return dept.id
+
+    if any(k in text for k in ["garbage", "trash", "sanitat", "waste", "clean"]):
+        dept = db.query(Department).filter(Department.name.ilike("%Sanitat%")).first()
+        if dept: return dept.id
+
+    if any(k in text for k in ["drain", "sewage", "gutter", "overflow"]):
+        dept = db.query(Department).filter(Department.name.ilike("%Drain%")).first()
+        if dept: return dept.id
+
+    # Default fallback lookup
+    dept = db.query(Department).filter(Department.name.ilike(f"%{category}%")).first()
+    if dept: return dept.id
+
+    # Fallback to first department
+    first_dept = db.query(Department).first()
+    return first_dept.id if first_dept else None
+
 @router.get("/")
 def get_complaints(
     ward_id: Optional[int] = None,
     category: Optional[str] = None,
     status: Optional[str] = None,
+    department: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     query = db.query(Complaint)
@@ -25,8 +62,11 @@ def get_complaints(
         query = query.filter(Complaint.category == category)
     if status:
         query = query.filter(Complaint.status == status)
+    if department and department != "All":
+        dept = db.query(Department).filter(Department.name.ilike(f"%{department}%")).first()
+        if dept:
+            query = query.filter(Complaint.department_id == dept.id)
         
-    # Check 14-day SLA overdue automatic check
     now = datetime.utcnow()
     complaints = query.all()
     for c in complaints:
@@ -113,8 +153,8 @@ async def create_complaint(
             
         photo_url = upload_image(photo_bytes)
 
-    dept = db.query(Department).filter(Department.name.ilike(f"%{category}%")).first()
-    dept_id = dept.id if dept else None
+    # Intelligently resolve municipal department ID
+    dept_id = get_department_for_complaint(category, description, db)
 
     new_complaint = Complaint(
         ward_id=ward_id,

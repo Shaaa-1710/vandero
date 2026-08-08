@@ -46,10 +46,20 @@ function App() {
       setIsLoginOpen(true);
       return;
     }
+    
+    // Instant Optimistic Update (0ms delay)
+    setComplaints((prev) =>
+      prev.map((c) => (c.id === complaintId ? { ...c, vote_count: c.vote_count + 1 } : c))
+    );
+
     try {
       await client.post(`/complaints/${complaintId}/upvote`);
       fetchData();
     } catch (err) {
+      // Revert if error / already upvoted
+      setComplaints((prev) =>
+        prev.map((c) => (c.id === complaintId ? { ...c, vote_count: Math.max(1, c.vote_count - 1) } : c))
+      );
       if (err.response && err.response.data && err.response.data.detail) {
         alert(err.response.data.detail);
       } else {
