@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:8000';
+// Live Production Render Backend API URL
+const LIVE_BACKEND_URL = 'https://civic-pulse-backend-f5ju.onrender.com';
+
+const API_BASE = import.meta.env.VITE_BACKEND_URL || LIVE_BACKEND_URL;
 
 const client = axios.create({
   baseURL: API_BASE,
