@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import CitizenDashboard from './pages/CitizenDashboard';
 import LandingLoginPage from './pages/LandingLoginPage';
+import OfficerDashboardApp from './officer-dashboard/OfficerDashboardApp';
 import NewComplaintModal from './components/NewComplaintModal';
 import TrackComplaintModal from './components/TrackComplaintModal';
 import LoginModal from './components/LoginModal';
@@ -56,6 +57,16 @@ function App() {
       }
     }
   };
+
+  // If user is logged in as an Officer, render full Officer Dashboard pipeline
+  if (user && user.role !== 'citizen') {
+    return (
+      <OfficerDashboardApp 
+        officer={user.officerData}
+        onLogout={() => setUser(null)}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden font-sans">
