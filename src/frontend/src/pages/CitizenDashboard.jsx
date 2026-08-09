@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { Search, Navigation, Plus, ThumbsUp, AlertCircle, MapPin, CheckCircle, Clock, Map as MapIcon, ChevronUp, ChevronDown, ListFilter } from 'lucide-react';
+import { Search, Navigation, Plus, ThumbsUp, AlertCircle, MapPin, CheckCircle, Clock, Map as MapIcon, ChevronUp, ChevronDown, ListFilter, UserCheck } from 'lucide-react';
 import Map from '../components/Map';
 import client from '../api/client';
 
-function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, setComplaints, onOpenNewComplaint, onUpvote, pinLocation, setPinLocation }) {
+function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, setComplaints, onOpenNewComplaint, onUpvote, pinLocation, setPinLocation, currentUser }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [loadingSearch, setLoadingSearch] = useState(false);
   const [searchAlertMessage, setSearchAlertMessage] = useState('');
   
   // Mobile Bottom Sheet Panel State
   const [isMobileListOpen, setIsMobileListOpen] = useState(false);
+
+  // Filter tab state: 'all' vs 'mine'
+  const [filterTab, setFilterTab] = useState('all');
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -89,6 +92,11 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
     onOpenNewComplaint();
   };
 
+  // Filter complaints based on tab ('all' vs 'mine')
+  const displayedComplaints = filterTab === 'mine' && currentUser
+    ? complaints.filter(c => c.mobile_number === currentUser.mobile_number || c.email === currentUser.email)
+    : complaints;
+
   return (
     <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-64px)] relative overflow-hidden bg-gray-100 font-sans">
       
@@ -107,7 +115,7 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
           <div className="flex items-center space-x-2">
             <ListFilter className="w-4 h-4 text-emerald-300" />
             <span className="font-bold text-xs">
-              {selectedWard ? `${selectedWard.ward_number} - ${selectedWard.name}` : 'Coimbatore Complaints'} ({complaints.length})
+              {selectedWard ? `${selectedWard.ward_number} - ${selectedWard.name}` : 'Coimbatore Complaints'} ({displayedComplaints.length})
             </span>
           </div>
           <div className="flex items-center space-x-1 text-xs font-semibold bg-emerald-800 px-2 py-0.5 rounded border border-emerald-600">
@@ -165,6 +173,27 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
               <span className="truncate">+ New Complaint</span>
             </button>
           </div>
+
+          {/* Citizen Filter Tabs: All Complaints vs My Registered Complaints */}
+          <div className="flex bg-white p-1 rounded-lg border border-emerald-200 text-xs font-semibold">
+            <button
+              onClick={() => setFilterTab('all')}
+              className={`flex-1 py-1.5 rounded-md transition text-center ${
+                filterTab === 'all' ? 'bg-[#065f46] text-white font-bold' : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              Ward Complaints ({complaints.length})
+            </button>
+            <button
+              onClick={() => setFilterTab('mine')}
+              className={`flex-1 py-1.5 rounded-md transition text-center flex items-center justify-center space-x-1 ${
+                filterTab === 'mine' ? 'bg-[#065f46] text-white font-bold' : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>My Registered Complaints</span>
+            </button>
+          </div>
         </div>
 
         {/* Selected Ward Info Banner (Desktop Only) */}
@@ -173,7 +202,7 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
             {selectedWard ? `${selectedWard.ward_number} - ${selectedWard.name}` : 'Coimbatore Ward 1'}
           </span>
           <span className="text-[11px] text-emerald-200 font-semibold shrink-0">
-            {complaints.length} Open Reports
+            {displayedComplaints.length} Reports
           </span>
         </div>
 
@@ -181,25 +210,29 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
         <div className={`flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3 ${isMobileListOpen ? 'block' : 'hidden md:block'}`}>
           <div className="flex justify-between items-center mb-2">
             <h3 className="font-bold text-xs uppercase text-gray-500 tracking-wider">
-              Ranked Area Complaints
+              {filterTab === 'mine' ? 'My Submitted Complaints' : 'Registered Area Complaints'}
             </h3>
             <span className="text-[10px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded font-semibold border border-emerald-200">
-              Severity & Upvotes First
+              Live Tracker
             </span>
           </div>
 
-          {complaints.length === 0 ? (
+          {displayedComplaints.length === 0 ? (
             <div className="text-center py-12 text-gray-400 text-xs">
-              No open complaints reported in this area yet.
+              {filterTab === 'mine' 
+                ? 'You have not registered any complaints yet.' 
+                : 'No open complaints reported in this area yet.'}
             </div>
           ) : (
-            complaints.map(c => (
+            displayedComplaints.map(c => (
               <div 
                 key={c.id} 
                 className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs hover:shadow-xs transition space-y-2"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-bold text-gray-900 text-xs line-clamp-1">{c.category}</span>
+                <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                  <span className="font-extrabold text-emerald-800 text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    CID-{c.id}
+                  </span>
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
                     c.status === 'Resolved' ? 'bg-green-100 text-green-800' :
                     c.status === 'Overdue' ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'
@@ -207,6 +240,8 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
                     {c.status}
                   </span>
                 </div>
+
+                <div className="font-bold text-gray-900 text-xs line-clamp-1">{c.category}</div>
 
                 <p className="text-xs text-gray-700 line-clamp-2">{c.description}</p>
 
@@ -246,7 +281,7 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
       <div className="flex-1 h-full relative z-10">
         <Map 
           wards={wards}
-          complaints={complaints}
+          complaints={displayedComplaints}
           selectedWard={selectedWard}
           onSelectLocation={(lat, lng) => {
             setPinLocation({ lat, lng });
@@ -298,7 +333,7 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
             className="md:hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-20 bg-[#065f46] text-white px-4 py-2 rounded-full font-bold text-xs shadow-2xl border border-emerald-400 flex items-center space-x-2"
           >
             <ListFilter className="w-4 h-4" />
-            <span>View {complaints.length} Nearby Complaints</span>
+            <span>View {displayedComplaints.length} Nearby Complaints</span>
           </button>
         )}
       </div>

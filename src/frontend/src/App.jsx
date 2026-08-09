@@ -6,22 +6,21 @@ import OfficerDashboardApp from './officer-dashboard/OfficerDashboardApp';
 import NewComplaintModal from './components/NewComplaintModal';
 import TrackComplaintModal from './components/TrackComplaintModal';
 import LoginModal from './components/LoginModal';
+
 import client from './api/client';
 
 function App() {
-  const [user, setUser] = useState(null);
-
+  const [user, setUser] = useState(null); // { username, mobile_number, role, officerData }
   const [wards, setWards] = useState([]);
   const [selectedWard, setSelectedWard] = useState(null);
   const [complaints, setComplaints] = useState([]);
+  const [pinLocation, setPinLocation] = useState(null); // { lat, lng }
 
-  const [pinLocation, setPinLocation] = useState(null);
-  
+  // Modal states
   const [isNewComplaintOpen, setIsNewComplaintOpen] = useState(false);
   const [isTrackComplaintOpen, setIsTrackComplaintOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
-  // Fetch Wards and Complaints
   const fetchData = async () => {
     try {
       const wardsRes = await client.get('/wards/');
@@ -42,50 +41,48 @@ function App() {
   }, []);
 
   const handleUpvote = async (complaintId) => {
-    if (!user) {
-      setIsLoginOpen(true);
-      return;
-    }
-    
-    // Instant Optimistic Update (0ms delay)
-    setComplaints((prev) =>
-      prev.map((c) => (c.id === complaintId ? { ...c, vote_count: c.vote_count + 1 } : c))
-    );
+    // 0ms Optimistic UI update
+    setComplaints(prev => prev.map(c => 
+      c.id === complaintId ? { ...c, vote_count: c.vote_count + 1 } : c
+    ));
 
     try {
       await client.post(`/complaints/${complaintId}/upvote`);
-      fetchData();
     } catch (err) {
-      // Revert if error / already upvoted
-      setComplaints((prev) =>
-        prev.map((c) => (c.id === complaintId ? { ...c, vote_count: Math.max(1, c.vote_count - 1) } : c))
-      );
-      if (err.response && err.response.data && err.response.data.detail) {
-        alert(err.response.data.detail);
-      } else {
-        alert("Could not upvote complaint.");
-      }
+      console.error("Error upvoting:", err);
+      // Revert if API fails
+      fetchData();
     }
   };
 
-  // If user is logged in as an Officer, render full Officer Dashboard pipeline
-  if (user && user.role !== 'citizen') {
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setUser(null);
+  };
+
+  // If logged in as Municipal Officer, render full Officer Dashboard Application
+  if (user && user.role === 'ward_officer') {
     return (
       <OfficerDashboardApp 
-        officer={user.officerData}
-        onLogout={() => setUser(null)}
+        currentOfficer={user.officerData || {
+          id: "OFF-001",
+          name: user.username || "Ward Officer",
+          email: "officer@coimbatorecorp.gov.in",
+          role: "Ward Officer",
+          department: "Roads & Highways",
+          ward: "Ward 1 — RS Puram"
+        }}
+        onLogout={handleLogout}
       />
     );
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden font-sans">
-      
-      {/* Top Navigation */}
+    <div className="min-h-screen flex flex-col bg-slate-950 font-sans">
       <Navbar 
-        user={user}
+        user={user} 
+        onLogout={handleLogout}
         onOpenLogin={() => setIsLoginOpen(true)}
-        onLogout={() => setUser(null)}
         onOpenNewComplaint={() => {
           if (!user) setIsLoginOpen(true);
           else setIsNewComplaintOpen(true);
@@ -108,6 +105,7 @@ function App() {
           onUpvote={handleUpvote}
           pinLocation={pinLocation}
           setPinLocation={setPinLocation}
+          currentUser={user}
         />
       ) : (
         <LandingLoginPage 

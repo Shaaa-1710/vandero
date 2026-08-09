@@ -13,7 +13,7 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY", "civic_pulse_coimbatore_secret_jwt_key_
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 7 days
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login", auto_error=False)
 
 def get_password_hash(password: str) -> str:
     salt = os.urandom(16)
@@ -48,6 +48,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if not token:
+        raise credentials_exception
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         mobile_number: str = payload.get("sub")
@@ -65,6 +68,20 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
     return user
+
+def get_optional_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        mobile_number: str = payload.get("sub")
+        role: str = payload.get("role", "citizen")
+        if role == "citizen":
+            return db.query(User).filter(User.mobile_number == mobile_number).first()
+        else:
+            return db.query(Officer).filter(Officer.mobile_number == mobile_number).first()
+    except Exception:
+        return None
 
 def get_current_officer(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """

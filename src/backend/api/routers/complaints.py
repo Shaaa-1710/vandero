@@ -1,100 +1,96 @@
-import json
-from datetime import datetime, timedelta
-from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
+from typing import List, Optional
 from database import get_db
-from models import Complaint, ComplaintVote, Department, Ward, User
-from api.deps import get_current_user
+from models import Complaint, Ward, User
+from api.deps import get_current_user, get_optional_current_user, get_password_hash
 from services.ai_service import (
-    detect_semantic_duplicate,
-    validate_photo_with_gemini,
-    analyze_complaint_severity_and_hazard
+    analyze_complaint, 
+    detect_semantic_duplicate, 
+    validate_photo_with_gemini, 
+    get_department_for_complaint
 )
 from services.cloudinary_service import upload_image
 
-router = APIRouter(prefix="/complaints", tags=["complaints"])
+router = APIRouter(prefix="/complaints", tags=["Complaints"])
 
-def get_department_for_complaint(category: str, description: str, db: Session) -> Optional[int]:
-    text = (category + " " + description).lower()
-    
-    if any(k in text for k in ["street light", "lighting", "lamp", "electrical", "electricity", "wire", "pole"]):
-        dept = db.query(Department).filter(
-            Department.name.ilike("%Street Lighting%") | Department.name.ilike("%Electricity%")
-        ).first()
-        if dept: return dept.id
-
-    if any(k in text for k in ["road", "pothole", "tar", "pavement", "highway", "street"]):
-        dept = db.query(Department).filter(Department.name.ilike("%Road%")).first()
-        if dept: return dept.id
-
-    if any(k in text for k in ["water", "pipe", "leak", "tap", "supply"]):
-        dept = db.query(Department).filter(Department.name.ilike("%Water%")).first()
-        if dept: return dept.id
-
-    if any(k in text for k in ["garbage", "trash", "sanitat", "waste", "clean"]):
-        dept = db.query(Department).filter(Department.name.ilike("%Sanitat%")).first()
-        if dept: return dept.id
-
-    if any(k in text for k in ["drain", "sewage", "gutter", "overflow"]):
-        dept = db.query(Department).filter(Department.name.ilike("%Drain%")).first()
-        if dept: return dept.id
-
-    dept = db.query(Department).filter(Department.name.ilike(f"%{category}%")).first()
-    if dept: return dept.id
-
-    first_dept = db.query(Department).first()
-    return first_dept.id if first_dept else None
-
-@router.get("/")
+@router.get("/", response_model=List[dict])
 def get_complaints(
-    ward_id: Optional[int] = None,
-    category: Optional[str] = None,
-    status: Optional[str] = None,
-    department: Optional[str] = None,
+    ward_id: Optional[int] = Query(None),
+    category: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
     query = db.query(Complaint)
+    
     if ward_id:
         query = query.filter(Complaint.ward_id == ward_id)
     if category:
         query = query.filter(Complaint.category == category)
     if status:
         query = query.filter(Complaint.status == status)
-    if department and department != "All":
-        dept = db.query(Department).filter(Department.name.ilike(f"%{department}%")).first()
-        if dept:
-            query = query.filter(Complaint.department_id == dept.id)
-        
-    complaints = query.all()
 
-    # Requirement 8: Severity-First Priority Sorting Order
-    # 1. AI Severity Score (10 > 1)
-    # 2. Vote Count (Desc)
-    # 3. Created Timestamp (Asc / Oldest waiting time first)
-    sorted_complaints = sorted(
-        complaints,
-        key=lambda x: (
-            x.ai_severity_score or 7,
-            x.vote_count or 1,
-            -x.created_at.timestamp() if x.created_at else 0
-        ),
-        reverse=True
-    )
-    return sorted_complaints
+    # Requirement 8: Priority-First Queue Ranking Order (AI Severity > Upvotes > Waiting Time)
+    complaints = query.order_by(
+        Complaint.ai_severity_score.desc(),
+        Complaint.vote_count.desc(),
+        Complaint.created_at.asc()
+    ).all()
+
+    results = []
+    for c in complaints:
+        results.append({
+            "id": c.id,
+            "name": c.name,
+            "street": c.street,
+            "description": c.description,
+            "mobile_number": c.mobile_number,
+            "communication_address": c.communication_address,
+            "category": c.category,
+            "gender": c.gender,
+            "email": c.email,
+            "ward_id": c.ward_id,
+            "location_lat": c.location_lat,
+            "location_lng": c.location_lng,
+            "pincode": c.pincode,
+            "landmark": c.landmark,
+            "photo_url": c.photo_url,
+            "status": c.status,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "vote_count": c.vote_count,
+            "ai_severity_score": c.ai_severity_score,
+            "ai_hazard_type": c.ai_hazard_type,
+            "ai_explanation": c.ai_explanation
+        })
+    return results
 
 @router.post("/precheck-duplicate")
 def precheck_duplicate(
-    ward_id: int,
-    category: str,
+    ward_id: int = Query(...),
+    category: str = Query(...),
     db: Session = Depends(get_db)
 ):
+    """
+    Step 1 Pre-Check endpoint: Returns existing open complaints in the target ward
+    so citizens can review and upvote before submitting a duplicate.
+    """
     open_complaints = db.query(Complaint).filter(
         Complaint.ward_id == ward_id,
         Complaint.category == category,
         Complaint.status.in_(["Open", "In Progress", "Overdue"])
-    ).all()
-    return open_complaints
+    ).order_by(Complaint.vote_count.desc()).limit(5).all()
+
+    return [
+        {
+            "id": c.id,
+            "category": c.category,
+            "street": c.street,
+            "description": c.description,
+            "vote_count": c.vote_count,
+            "status": c.status
+        }
+        for c in open_complaints
+    ]
 
 @router.post("/create")
 async def create_complaint(
@@ -112,7 +108,7 @@ async def create_complaint(
     pincode: Optional[str] = Form(None),
     landmark: Optional[str] = Form(None),
     photo: Optional[UploadFile] = File(None),
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
     db: Session = Depends(get_db)
 ):
     # Requirement 5: Strict Backend Pin Location Validation
@@ -121,6 +117,24 @@ async def create_complaint(
             status_code=400,
             detail="Location coordinates are required. Please mark the complaint location on the map before submitting."
         )
+
+    # Automatically resolve user
+    user_id = None
+    if current_user:
+        user_id = current_user.id
+    else:
+        existing_user = db.query(User).filter(User.mobile_number == mobile_number).first()
+        if not existing_user:
+            existing_user = User(
+                mobile_number=mobile_number,
+                name=name,
+                email=email,
+                hashed_password=get_password_hash("citizen123")
+            )
+            db.add(existing_user)
+            db.commit()
+            db.refresh(existing_user)
+        user_id = existing_user.id
 
     # Fetch open complaints in the ward for 200m Haversine & Semantic AI duplicate check
     open_nearby = db.query(Complaint).filter(
@@ -178,12 +192,17 @@ async def create_complaint(
         photo_url = upload_image(photo_bytes)
 
     dept_id = get_department_for_complaint(category, description, db)
-    ai_result = analyze_complaint_severity_and_hazard(category, description)
+    
+    # Analyze severity and hazard type using Gemini AI (For Officer Portal Prioritization)
+    ai_evaluation = analyze_complaint(category, description)
+    ai_severity = ai_evaluation.get("severity_score", 8)
+    ai_hazard = ai_evaluation.get("hazard_type", "Municipal Safety Risk")
+    ai_expl = ai_evaluation.get("explanation", "Evaluated by AI Engine.")
 
-    new_complaint = Complaint(
+    complaint = Complaint(
+        user_id=user_id,
         ward_id=ward_id,
         department_id=dept_id,
-        created_by=current_user.id,
         name=name,
         street=street,
         description=description,
@@ -197,42 +216,38 @@ async def create_complaint(
         pincode=pincode,
         landmark=landmark,
         photo_url=photo_url,
-        ai_severity_score=ai_result.get("severity_score", 7),
-        ai_hazard_type=ai_result.get("hazard_type", "Public Hazard"),
-        ai_explanation=ai_result.get("explanation", f"AI verified complaint regarding {category}."),
-        vote_count=1,
+        ai_severity_score=ai_severity,
+        ai_hazard_type=ai_hazard,
+        ai_explanation=ai_expl,
         status="Open",
-        escalation_due_at=datetime.utcnow() + timedelta(days=14)
+        vote_count=1
     )
-    
-    db.add(new_complaint)
-    db.commit()
-    db.refresh(new_complaint)
 
-    return new_complaint
+    db.add(complaint)
+    db.commit()
+    db.refresh(complaint)
+
+    return {
+        "id": complaint.id,
+        "complaint_id": f"CID-{complaint.id}",
+        "name": complaint.name,
+        "street": complaint.street,
+        "description": complaint.description,
+        "category": complaint.category,
+        "status": complaint.status,
+        "created_at": complaint.created_at.isoformat() if complaint.created_at else None,
+        "vote_count": complaint.vote_count,
+        "message": f"Complaint CID-{complaint.id} registered successfully! You can track its status using Complaint ID CID-{complaint.id}."
+    }
 
 @router.post("/{complaint_id}/upvote")
-async def upvote_complaint(
-    complaint_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+def upvote_complaint(complaint_id: int, db: Session = Depends(get_db)):
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
         
-    existing_vote = db.query(ComplaintVote).filter(
-        ComplaintVote.complaint_id == complaint_id,
-        ComplaintVote.user_id == current_user.id
-    ).first()
-    
-    if existing_vote:
-        raise HTTPException(status_code=400, detail="You have already upvoted this complaint")
-        
-    vote = ComplaintVote(complaint_id=complaint_id, user_id=current_user.id)
-    db.add(vote)
-    
     complaint.vote_count += 1
     db.commit()
-
-    return {"message": "Upvoted successfully", "vote_count": complaint.vote_count}
+    db.refresh(complaint)
+    
+    return {"id": complaint.id, "vote_count": complaint.vote_count, "message": "Upvoted successfully"}
