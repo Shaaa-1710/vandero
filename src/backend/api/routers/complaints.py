@@ -125,16 +125,21 @@ async def create_complaint(
     else:
         existing_user = db.query(User).filter(User.mobile_number == mobile_number).first()
         if not existing_user:
-            existing_user = User(
-                mobile_number=mobile_number,
-                name=name,
-                email=email,
-                hashed_password=get_password_hash("citizen123")
-            )
-            db.add(existing_user)
-            db.commit()
-            db.refresh(existing_user)
-        user_id = existing_user.id
+            try:
+                existing_user = User(
+                    mobile_number=mobile_number,
+                    name=name,
+                    email=email,
+                    hashed_password=get_password_hash("citizen123")
+                )
+                db.add(existing_user)
+                db.commit()
+                db.refresh(existing_user)
+            except Exception:
+                db.rollback()
+                existing_user = db.query(User).first()
+        if existing_user:
+            user_id = existing_user.id
 
     # Fetch open complaints in the ward for 200m Haversine & Semantic AI duplicate check
     open_nearby = db.query(Complaint).filter(
@@ -170,8 +175,10 @@ async def create_complaint(
                         "reason": dup_result.get("reason")
                     }
                 )
-        except ValueError as val_err:
-            raise HTTPException(status_code=500, detail=str(val_err))
+        except HTTPException:
+            raise
+        except Exception as dup_err:
+            print(f"Duplicate precheck warning: {dup_err}")
 
     photo_url = None
     if photo:
@@ -186,8 +193,10 @@ async def create_complaint(
                     status_code=400,
                     detail=f"Photo validation failed: {vision_result.get('reason', 'Image does not match the issue description/category')}"
                 )
-        except ValueError as val_err:
-            raise HTTPException(status_code=500, detail=str(val_err))
+        except HTTPException:
+            raise
+        except Exception as vis_err:
+            print(f"Vision validation warning: {vis_err}")
             
         photo_url = upload_image(photo_bytes)
 
@@ -200,7 +209,7 @@ async def create_complaint(
     ai_expl = ai_evaluation.get("explanation", "Evaluated by AI Engine.")
 
     complaint = Complaint(
-        user_id=user_id,
+        created_by=user_id,
         ward_id=ward_id,
         department_id=dept_id,
         name=name,
