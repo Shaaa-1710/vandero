@@ -79,6 +79,9 @@ def analyze_complaint_severity_and_hazard(category: str, description: str) -> di
         print(f"Gemini API Analysis exception: {e}")
         return fallback_ai_analysis(category, description)
 
+# Alias for backward compatibility
+analyze_complaint = analyze_complaint_severity_and_hazard
+
 def fallback_ai_analysis(category: str, description: str) -> dict:
     text = (category + " " + description).lower()
     
@@ -113,13 +116,31 @@ def fallback_ai_analysis(category: str, description: str) -> dict:
             "explanation": f"AI verified complaint regarding {category}. Assigned to ward municipal team for priority inspection."
         }
 
+def get_department_for_complaint(category: str, description: str, db=None) -> int:
+    """
+    Maps complaint category and description to standard municipal department IDs.
+    1: Roads & Highways, 2: Water Supply, 3: Sanitation, 4: Street Lighting, 5: Electricity, 6: General
+    """
+    cat_lower = (category + " " + description).lower()
+    if "road" in cat_lower or "pothole" in cat_lower:
+        return 1
+    elif "water" in cat_lower or "leak" in cat_lower or "pipe" in cat_lower:
+        return 2
+    elif "sanitat" in cat_lower or "garbage" in cat_lower or "trash" in cat_lower:
+        return 3
+    elif "light" in cat_lower or "lamp" in cat_lower:
+        return 4
+    elif "electr" in cat_lower or "power" in cat_lower or "wire" in cat_lower:
+        return 5
+    else:
+        return 6
+
 def detect_semantic_duplicate(new_description: str, new_lat: float, new_lng: float, nearby_complaints: list) -> dict:
     """
     Requirements 6 & 7:
     Strictly filters complaints within a 200 METER RADIUS using Haversine distance formula,
     and then performs semantic AI comparison on the 200m subset.
     """
-    # 1. Enforce 200m Geographic Proximity Filter (200 meters)
     within_200m_complaints = []
     for c in nearby_complaints:
         c_lat = c.get("lat") or c.get("location_lat")
@@ -131,7 +152,6 @@ def detect_semantic_duplicate(new_description: str, new_lat: float, new_lng: flo
                 c_copy["distance_meters"] = round(dist_meters, 1)
                 within_200m_complaints.append(c_copy)
 
-    # If no existing complaints exist within 200m radius -> NOT DUPLICATE
     if not within_200m_complaints:
         return {"is_duplicate": False, "existing_complaint_id": None, "reason": "No existing complaints within 200m radius."}
 
