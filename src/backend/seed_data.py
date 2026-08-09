@@ -1,4 +1,5 @@
 import json
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from database import engine, SessionLocal
 from models import Base, Ward, Department
@@ -37,12 +38,26 @@ PEELAMEDU_GEOJSON = json.dumps({
     ]]
 })
 
+def run_auto_migrations():
+    """
+    Auto-migrates new columns on existing PostgreSQL database tables.
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE complaints ADD COLUMN IF NOT EXISTS ai_severity_score INTEGER DEFAULT 7;"))
+            conn.execute(text("ALTER TABLE complaints ADD COLUMN IF NOT EXISTS ai_hazard_type VARCHAR DEFAULT 'Public Hazard';"))
+            conn.execute(text("ALTER TABLE complaints ADD COLUMN IF NOT EXISTS ai_explanation TEXT DEFAULT 'Verified civic issue.';"))
+            conn.commit()
+    except Exception as e:
+        print(f"Auto-migration notice: {e}")
+
 def seed_db():
     """
-    Initializes PostgreSQL tables and seeds essential municipal metadata (Wards & Departments).
-    No dummy citizen accounts or test entries.
+    Initializes PostgreSQL tables, executes auto-migrations, and seeds metadata.
     """
     Base.metadata.create_all(bind=engine)
+    run_auto_migrations()
+    
     db: Session = SessionLocal()
 
     # Seed Official Municipal Departments

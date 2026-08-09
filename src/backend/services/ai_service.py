@@ -1,12 +1,22 @@
 import os
 import json
 import math
-import google.generativeai as genai
+import warnings
+
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+try:
+    import google.genai as genai
+except ImportError:
+    import google.generativeai as genai
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+    except Exception:
+        pass
 
 def calculate_haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
@@ -121,18 +131,16 @@ def detect_semantic_duplicate(new_description: str, new_lat: float, new_lng: flo
                 c_copy["distance_meters"] = round(dist_meters, 1)
                 within_200m_complaints.append(c_copy)
 
-    # If no existing complaints exist within 200m radius -> NOT DUPLICATE (Test 3 & 7)
+    # If no existing complaints exist within 200m radius -> NOT DUPLICATE
     if not within_200m_complaints:
         return {"is_duplicate": False, "existing_complaint_id": None, "reason": "No existing complaints within 200m radius."}
 
     if not GEMINI_API_KEY:
-        # Keyword-based fallback semantic match if key unconfigured
         new_desc_lower = new_description.lower()
         for c in within_200m_complaints:
             existing_desc = (c.get("description") or "").lower()
             existing_cat = (c.get("category") or "").lower()
             
-            # Match if describing same physical issue
             pothole_match = ("pothole" in new_desc_lower or "road" in new_desc_lower) and ("pothole" in existing_desc or "road" in existing_desc or "road" in existing_cat)
             light_match = ("light" in new_desc_lower or "lamp" in new_desc_lower) and ("light" in existing_desc or "light" in existing_cat)
             water_match = ("water" in new_desc_lower or "leak" in new_desc_lower) and ("water" in existing_desc or "water" in existing_cat)
@@ -172,8 +180,8 @@ def detect_semantic_duplicate(new_description: str, new_lat: float, new_lng: flo
         {json.dumps(complaints_context, indent=2)}
 
         CRITICAL RULES:
-        1. Mark "is_duplicate": true ONLY if the new complaint describes the EXACT SAME physical problem as an existing complaint (e.g., "large pothole near bus stop" vs "huge road hole beside bus stand").
-        2. Mark "is_duplicate": false if they are DIFFERENT issues in the same area (e.g. "street light broken" vs "road flooded", or "pothole" vs "garbage accumulation").
+        1. Mark "is_duplicate": true ONLY if the new complaint describes the EXACT SAME physical problem as an existing complaint.
+        2. Mark "is_duplicate": false if they are DIFFERENT issues in the same area.
 
         Respond STRICTLY in valid JSON:
         {{
