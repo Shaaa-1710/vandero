@@ -23,14 +23,20 @@ def get_wards(db: Session = Depends(get_db)):
 
 @router.get("/search")
 def search_ward(query: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+    clean_q = query.strip()
     ward = db.query(Ward).filter(
-        (Ward.name.ilike(f"%{query}%")) | (Ward.ward_number.ilike(f"%{query}%"))
+        (Ward.name.ilike(f"%{clean_q}%")) | (Ward.ward_number.ilike(f"%{clean_q}%"))
     ).first()
+    
     if not ward:
-        # Default to first ward if query not found
+        # Search by partial name match
+        ward = db.query(Ward).filter(Ward.name.ilike(f"%{clean_q[:3]}%")).first()
+        
+    if not ward:
         ward = db.query(Ward).first()
+        
     if not ward:
-        raise HTTPException(status_code=4404, detail="No wards found")
+        raise HTTPException(status_code=404, detail="No wards found")
         
     return {
         "id": ward.id,

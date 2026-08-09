@@ -12,12 +12,21 @@ except Exception as e:
 
 app = FastAPI(title="Civic Pulse API (PostgreSQL)")
 
+origins = [
+    "https://vandero.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "*"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 app.include_router(auth.router)
