@@ -67,13 +67,7 @@ def get_complaints(
         if dept:
             query = query.filter(Complaint.department_id == dept.id)
         
-    now = datetime.utcnow()
     complaints = query.all()
-    for c in complaints:
-        if c.status in ["Open", "In Progress"] and c.escalation_due_at and now > c.escalation_due_at:
-            c.status = "Overdue"
-    db.commit()
-
     # Sort primarily by vote_count descending, then time open
     sorted_complaints = sorted(complaints, key=lambda x: (x.vote_count, x.created_at), reverse=True)
     return sorted_complaints
@@ -207,6 +201,5 @@ async def upvote_complaint(
     
     complaint.vote_count += 1
     db.commit()
-    db.refresh(complaint)
 
     return {"message": "Upvoted successfully", "vote_count": complaint.vote_count}

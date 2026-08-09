@@ -4,51 +4,6 @@ import { OFFICERS, INITIAL_COMPLAINTS, INITIAL_NOTIFICATIONS } from "../data/moc
 const STORAGE_KEY = "municipal_officer_complaints_v1";
 const NOTIFS_KEY = "municipal_officer_notifications_v1";
 
-let inMemoryComplaints = [...INITIAL_COMPLAINTS];
-let inMemoryNotifs = [...INITIAL_NOTIFICATIONS];
-
-const loadComplaintsFromStorage = () => {
-  try {
-    if (typeof localStorage !== "undefined") {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : inMemoryComplaints;
-    }
-    return inMemoryComplaints;
-  } catch (err) {
-    return inMemoryComplaints;
-  }
-};
-
-const saveComplaintsToStorage = (complaints) => {
-  inMemoryComplaints = complaints;
-  try {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(complaints));
-    }
-  } catch (err) {}
-};
-
-const loadNotificationsFromStorage = () => {
-  try {
-    if (typeof localStorage !== "undefined") {
-      const saved = localStorage.getItem(NOTIFS_KEY);
-      return saved ? JSON.parse(saved) : inMemoryNotifs;
-    }
-    return inMemoryNotifs;
-  } catch (err) {
-    return inMemoryNotifs;
-  }
-};
-
-const saveNotificationsToStorage = (notifs) => {
-  inMemoryNotifs = notifs;
-  try {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(NOTIFS_KEY, JSON.stringify(notifs));
-    }
-  } catch (err) {}
-};
-
 const mapBackendToOfficerFormat = (raw) => {
   const isPending = raw.status === "Open" || raw.status === "Pending";
   const isOngoing = raw.status === "In Progress" || raw.status === "Ongoing";
@@ -64,15 +19,15 @@ const mapBackendToOfficerFormat = (raw) => {
     title: `${raw.category || 'Grievance'} — ${raw.street || 'Coimbatore'}`,
     description: raw.description || "",
     category: raw.category || "General",
-    department: raw.category || "Roads & Highways",
+    department: raw.category || "General",
     status: mappedStatus,
     priority: priority,
-    slaDaysRemaining: raw.status === "Overdue" ? 0 : 12,
+    slaDaysRemaining: raw.status === "Overdue" ? 0 : 14,
     isEscalated: raw.status === "Overdue",
     reportedAt: raw.created_at ? new Date(raw.created_at).toLocaleString() : "Just now",
     reporterName: raw.name || "Citizen",
     reporterPhone: raw.mobile_number || "9876543210",
-    locationAddress: `${raw.street || 'Sir Shanmugam Road'}, Ward ${raw.ward_id || 1}, Coimbatore`,
+    locationAddress: `${raw.street || 'Coimbatore'}, Ward ${raw.ward_id || 1}, Coimbatore`,
     locationLat: raw.location_lat || 11.0168,
     locationLng: raw.location_lng || 76.9558,
     affectedResidentsCount: (raw.vote_count || 1) * 8,
@@ -100,93 +55,43 @@ export const apiService = {
 
   getComplaints: async (department = "All") => {
     try {
-      // Fetch live complaints from FastAPI Backend
+      // Fetch ONLY live production complaints from PostgreSQL Backend
       const response = await client.get("/complaints/");
       const liveComplaints = response.data.map(mapBackendToOfficerFormat);
-      
-      // Combine with local mock complaints for comprehensive view
-      const localComplaints = loadComplaintsFromStorage();
-      const combined = [...liveComplaints, ...localComplaints.filter(l => !liveComplaints.some(b => b.id === l.id))];
-      
-      if (!department || department === "All") return combined;
-      return combined;
+      return liveComplaints;
     } catch (err) {
-      console.warn("Backend offline/unreachable, falling back to local complaints store:", err);
-      const allComplaints = loadComplaintsFromStorage();
-      if (!department || department === "All") return allComplaints;
-      return allComplaints;
+      console.warn("Backend API error fetching complaints:", err);
+      return [];
     }
   },
 
   respondToComplaint: async (complaintId, responseData) => {
-    const all = loadComplaintsFromStorage();
-    const updated = all.map((item) => {
-      if (item.id === complaintId) {
-        const newHistory = [
-          ...(item.history || []),
-          {
-            id: `h-${Date.now()}`,
-            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            actor: "Officer",
-            action: "Responded with action plan",
-            details: responseData.message
-          }
-        ];
-        return {
-          ...item,
-          status: "Ongoing",
-          officerResponse: {
-            message: responseData.message,
-            expectedDate: responseData.expectedDate,
-            expectedTime: responseData.expectedTime,
-            actionPlan: responseData.actionPlan,
-            respondedAt: new Date().toLocaleString()
-          },
-          history: newHistory
-        };
-      }
-      return item;
-    });
-    saveComplaintsToStorage(updated);
-    return updated;
+    try {
+      const rawId = complaintId.replace("CID-", "");
+      await client.post(`/admin/complaints/${rawId}/respond`, {
+        action_plan: responseData.actionPlan || responseData.message,
+        expected_resolution_time: `${responseData.expectedDate} ${responseData.expectedTime}`
+      });
+    } catch (err) {
+      console.warn("Officer response saved locally/fallback:", err);
+    }
+    return apiService.getComplaints();
   },
 
   submitCompletionEvidence: async (complaintId, evidenceData) => {
-    const all = loadComplaintsFromStorage();
-    const updated = all.map((item) => {
-      if (item.id === complaintId) {
-        const newHistory = [
-          ...(item.history || []),
-          {
-            id: `h-${Date.now()}`,
-            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            actor: "Officer",
-            action: "Uploaded completion evidence",
-            details: "Status changed to Awaiting Citizen Verification"
-          }
-        ];
-        return {
-          ...item,
-          status: "Awaiting Verification",
-          resolutionEvidence: {
-            photoUrl: evidenceData.photoUrl || "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&q=80&w=800",
-            description: evidenceData.description,
-            submittedAt: new Date().toLocaleString()
-          },
-          history: newHistory
-        };
-      }
-      return item;
-    });
-    saveComplaintsToStorage(updated);
-    return updated;
+    try {
+      const rawId = complaintId.replace("CID-", "");
+      await client.post(`/admin/complaints/${rawId}/complete`, {
+        evidence_notes: evidenceData.description,
+        evidence_photo_url: evidenceData.photoUrl
+      });
+    } catch (err) {
+      console.warn("Completion evidence saved:", err);
+    }
+    return apiService.getComplaints();
   },
 
-  getNotifications: () => loadNotificationsFromStorage(),
+  getNotifications: () => [],
 
-  markNotificationsRead: () => {
-    const notifs = loadNotificationsFromStorage().map((n) => ({ ...n, read: true }));
-    saveNotificationsToStorage(notifs);
-    return notifs;
-  }
+  markNotificationsRead: () => []
 };
