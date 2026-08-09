@@ -8,23 +8,6 @@ function CameraCapture({ onCapture, capturedFile, onClear }) {
   const [cameraActive, setCameraActive] = useState(false);
   const [error, setError] = useState(null);
 
-  const startCamera = async () => {
-    setError(null);
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false
-      });
-      setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-      }
-      setCameraActive(true);
-    } catch (err) {
-      setError("Camera access is required for live photo submission. Please allow camera permissions.");
-    }
-  };
-
   const stopCamera = () => {
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
@@ -32,6 +15,38 @@ function CameraCapture({ onCapture, capturedFile, onClear }) {
     }
     setCameraActive(false);
   };
+
+  const startCamera = async () => {
+    setError(null);
+    // Stop any existing stream first to prevent duplicate active streams
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      
+      setStream(mediaStream);
+      setCameraActive(true);
+    } catch (err) {
+      console.error("Camera access error:", err);
+      setError("Camera access is required for live photo submission. Please allow camera permissions.");
+      setCameraActive(false);
+    }
+  };
+
+  // Attach MediaStream to video element once mounted in DOM
+  useEffect(() => {
+    if (cameraActive && stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch((e) => {
+        console.warn("Video autoplay notice:", e);
+      });
+    }
+  }, [cameraActive, stream]);
 
   const takePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -59,9 +74,11 @@ function CameraCapture({ onCapture, capturedFile, onClear }) {
 
   useEffect(() => {
     return () => {
-      stopCamera();
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
     };
-  }, []);
+  }, [stream]);
 
   return (
     <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
@@ -109,7 +126,8 @@ function CameraCapture({ onCapture, capturedFile, onClear }) {
             ref={videoRef} 
             autoPlay 
             playsInline 
-            className="w-full h-56 object-cover"
+            muted
+            className="w-full h-56 object-cover bg-black"
           />
           <canvas ref={canvasRef} className="hidden" />
           

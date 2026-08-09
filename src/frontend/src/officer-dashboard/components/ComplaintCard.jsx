@@ -5,13 +5,13 @@ export default function ComplaintCard({ complaint, isSelected, onSelect }) {
   const getPriorityColorClass = (priority) => {
     switch (priority) {
       case "P1":
-        return "bg-[#ba1a1a]"; // Red
+        return "bg-red-600";
       case "P2":
-        return "bg-orange-600"; // Orange
+        return "bg-orange-600";
       case "P3":
-        return "bg-amber-500"; // Yellow/Amber
+        return "bg-amber-500";
       default:
-        return "bg-emerald-600"; // Green
+        return "bg-emerald-600";
     }
   };
 
@@ -19,7 +19,7 @@ export default function ComplaintCard({ complaint, isSelected, onSelect }) {
     switch (priority) {
       case "P1":
         return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-[#ba1a1a] border border-red-200">
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
             <AlertTriangle className="w-3.5 h-3.5 mr-1" />
             P1 Critical
           </span>
@@ -90,7 +90,7 @@ export default function ComplaintCard({ complaint, isSelected, onSelect }) {
       onClick={() => onSelect(complaint)}
       className={`rounded-xl border transition-all cursor-pointer relative bg-white overflow-hidden shadow-xs hover:shadow-md flex flex-col ${
         isSelected
-          ? "border-[#00355f] ring-2 ring-[#00355f]/20 shadow-md bg-slate-50/50"
+          ? "border-emerald-700 ring-2 ring-emerald-600/20 shadow-md bg-emerald-50/20"
           : "border-slate-200 hover:border-slate-300"
       }`}
     >
@@ -103,7 +103,7 @@ export default function ComplaintCard({ complaint, isSelected, onSelect }) {
           <div className="mb-2.5 px-2.5 py-1 bg-red-50 border border-red-200 rounded-md flex items-center justify-between text-xs text-red-900">
             <div className="flex items-center space-x-1.5 font-bold">
               <ShieldAlert className="w-4 h-4 text-red-600 shrink-0" />
-              <span>⚠️ Repeated Resolution Failure ({complaint.resolutionAttempts} attempts)</span>
+              <span>⚠️ Repeated Resolution Failure ({complaint.resolutionAttempts || 1} attempts)</span>
             </div>
             <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider">Escalated</span>
           </div>
@@ -127,8 +127,8 @@ export default function ComplaintCard({ complaint, isSelected, onSelect }) {
           <div className="flex items-center justify-between">
             {getPriorityBadge(complaint.priority)}
             <div className="flex items-center space-x-1 font-semibold text-slate-800">
-              <Users className="w-3.5 h-3.5 text-[#00355f] shrink-0" />
-              <span>{complaint.affectedResidents} residents affected</span>
+              <Users className="w-3.5 h-3.5 text-emerald-800 shrink-0" />
+              <span>{complaint.affectedResidents || 8} residents affected</span>
             </div>
           </div>
 
@@ -142,14 +142,14 @@ export default function ComplaintCard({ complaint, isSelected, onSelect }) {
         <div className="pt-2.5 mt-auto border-t border-slate-100 flex items-center justify-between">
           <div className="flex items-center space-x-1 text-[11px] text-slate-500">
             <Clock className="w-3.5 h-3.5 text-slate-400" />
-            <span>Submitted {complaint.submissionTime}</span>
+            <span>Submitted {complaint.reportedAt}</span>
           </div>
           <button
             onClick={(e) => {
               e.stopPropagation();
               onSelect(complaint);
             }}
-            className="inline-flex items-center space-x-1 text-xs font-bold text-[#00355f] hover:text-[#0f4c81]"
+            className="inline-flex items-center space-x-1 text-xs font-bold text-emerald-800 hover:text-emerald-900"
           >
             <span>View Complaint</span>
             <ArrowRight className="w-3.5 h-3.5" />

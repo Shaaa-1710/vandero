@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User, Officer
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-super-secret-key-change-me")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "civic_pulse_coimbatore_secret_jwt_key_2026")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 7 days
 
@@ -32,9 +32,12 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     except Exception:
         return False
 
-def create_access_token(data: dict):
+def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -61,4 +64,17 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         
     if user is None:
         raise credentials_exception
+    return user
+
+def get_current_officer(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """
+    Strict role authorization requirement enforcing officer permissions.
+    Rejects citizen tokens with HTTP 403 Forbidden.
+    """
+    user = get_current_user(token, db)
+    if not hasattr(user, 'role') or user.role == 'citizen':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Municipal Officer permissions required."
+        )
     return user

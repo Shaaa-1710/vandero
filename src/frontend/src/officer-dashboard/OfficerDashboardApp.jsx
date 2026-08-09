@@ -9,8 +9,6 @@ import ComplaintDetail from "./components/ComplaintDetail";
 import OfficerProfileModal from "./components/OfficerProfileModal";
 import { apiService } from "./services/apiService.js";
 
-const AUTH_KEY = "municipal_officer_auth_session_v1";
-
 export default function OfficerDashboardApp({ officer, onLogout }) {
   const currentOfficer = officer || {
     id: "OFF-001",
@@ -58,8 +56,10 @@ export default function OfficerDashboardApp({ officer, onLogout }) {
     };
   }, [complaints]);
 
+  // Requirement 8: SEVERITY-FIRST PRIORITY ORDERING
+  // Ordering logic: 1. Severity (P1/HIGH > P2/MEDIUM > P3/LOW), 2. Community Upvotes (Desc), 3. Waiting Time (Asc)
   const filteredComplaints = useMemo(() => {
-    return complaints.filter((item) => {
+    const list = complaints.filter((item) => {
       if (activeTab === "Pending" && item.status !== "Pending" && item.status !== "Reopened") return false;
       if (activeTab === "Ongoing" && item.status !== "Ongoing" && item.status !== "Awaiting Verification") return false;
       if (activeTab === "Completed" && item.status !== "Completed") return false;
@@ -75,6 +75,25 @@ export default function OfficerDashboardApp({ officer, onLogout }) {
       }
 
       return true;
+    });
+
+    return list.sort((a, b) => {
+      const priorityWeight = { "P1": 3, "P2": 2, "P3": 1 };
+      const weightA = priorityWeight[a.priority] || 1;
+      const weightB = priorityWeight[b.priority] || 1;
+
+      // Primary sort: Severity First
+      if (weightB !== weightA) {
+        return weightB - weightA;
+      }
+
+      // Secondary sort: Community Upvotes
+      if ((b.upvotesCount || 0) !== (a.upvotesCount || 0)) {
+        return (b.upvotesCount || 0) - (a.upvotesCount || 0);
+      }
+
+      // Tertiary sort: Time Open (Older first)
+      return new Date(a.reportedAt || 0) - new Date(b.reportedAt || 0);
     });
   }, [complaints, activeTab, priorityFilter, searchQuery]);
 
@@ -93,18 +112,6 @@ export default function OfficerDashboardApp({ officer, onLogout }) {
     setComplaints(updated);
   };
 
-  const handleVerifyCitizen = async (complaintId, isFixed, rejectionData) => {
-    const { updatedComplaints, newNotification } = await apiService.verifyByCitizen(
-      complaintId,
-      isFixed,
-      rejectionData
-    );
-    setComplaints(updatedComplaints);
-    if (newNotification) {
-      setNotifications((prev) => [newNotification, ...prev]);
-    }
-  };
-
   const handleMarkAllRead = () => {
     const updatedNotifs = apiService.markNotificationsRead();
     setNotifications(updatedNotifs);
@@ -117,7 +124,6 @@ export default function OfficerDashboardApp({ officer, onLogout }) {
         onBack={() => setSelectedComplaintId(null)}
         onRespond={handleRespond}
         onSubmitEvidence={handleSubmitEvidence}
-        onVerifyCitizen={handleVerifyCitizen}
       />
     );
   }
@@ -163,7 +169,7 @@ export default function OfficerDashboardApp({ officer, onLogout }) {
             <div className="flex items-center space-x-1 p-1 bg-slate-100 rounded-xl max-w-md w-full">
               {[
                 { id: "Pending", label: "Pending Review", count: counts.Pending, icon: Clock, color: "text-amber-600" },
-                { id: "Ongoing", label: "In Progress", count: counts.Ongoing, icon: RefreshCw, color: "text-indigo-600" },
+                { id: "Ongoing", label: "In Progress", count: counts.Ongoing, icon: RefreshCw, color: "text-emerald-600" },
                 { id: "Completed", label: "Completed", count: counts.Completed, icon: CheckCircle, color: "text-emerald-600" }
               ].map((tab) => {
                 const IconComponent = tab.icon;
@@ -174,7 +180,7 @@ export default function OfficerDashboardApp({ officer, onLogout }) {
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
                       isActive
-                        ? "bg-[#00355f] text-white shadow-xs"
+                        ? "bg-[#065f46] text-white shadow-xs"
                         : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
                     }`}
                   >
@@ -182,7 +188,7 @@ export default function OfficerDashboardApp({ officer, onLogout }) {
                     <span>{tab.label}</span>
                     <span
                       className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                        isActive ? "bg-[#0f4c81] text-white" : "bg-slate-200 text-slate-700"
+                        isActive ? "bg-emerald-800 text-white" : "bg-slate-200 text-slate-700"
                       }`}
                     >
                       {tab.count}
@@ -200,14 +206,14 @@ export default function OfficerDashboardApp({ officer, onLogout }) {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search CID or location..."
-                  className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-[#00355f] focus:outline-hidden"
+                  className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-[#065f46] focus:outline-hidden"
                 />
               </div>
 
               <select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
-                className="py-2 px-3 text-xs border border-slate-300 rounded-lg bg-slate-50 font-semibold focus:ring-2 focus:ring-[#00355f]"
+                className="py-2 px-3 text-xs border border-slate-300 rounded-lg bg-slate-50 font-semibold focus:ring-2 focus:ring-[#065f46]"
               >
                 <option value="All">All Priorities</option>
                 <option value="P1">P1 - Critical</option>

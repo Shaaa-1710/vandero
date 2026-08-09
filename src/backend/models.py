@@ -64,6 +64,11 @@ class Complaint(Base):
     location_lng = Column(Float)
     photo_url = Column(String, nullable=True)
     
+    # Real Gemini AI Assessment Attributes
+    ai_severity_score = Column(Integer, default=7)
+    ai_hazard_type = Column(String, default="Public Safety")
+    ai_explanation = Column(Text, nullable=True)
+    
     status = Column(String, default="Open", index=True)
     vote_count = Column(Integer, default=1, index=True)
     

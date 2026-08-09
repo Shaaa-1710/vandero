@@ -9,28 +9,6 @@ export default function WebcamCapture({ onCapture, initialImage }) {
   const [cameraError, setCameraError] = useState("");
   const [capturedImage, setCapturedImage] = useState(initialImage || null);
 
-  const startCamera = async () => {
-    setCameraError("");
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "environment" }
-        });
-        setStream(mediaStream);
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-        }
-        setIsCameraActive(true);
-      } else {
-        setCameraError("Webcam API is not supported in this browser.");
-      }
-    } catch (err) {
-      console.warn("Webcam access error:", err);
-      setCameraError("Camera access permission denied or no camera device found. Using simulated live snapshot.");
-      handleFallbackSnapshot();
-    }
-  };
-
   const stopCamera = () => {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
@@ -39,12 +17,45 @@ export default function WebcamCapture({ onCapture, initialImage }) {
     setIsCameraActive(false);
   };
 
+  const startCamera = async () => {
+    setCameraError("");
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "environment" }
+        });
+        setStream(mediaStream);
+        setIsCameraActive(true);
+      } else {
+        setCameraError("Webcam API is not supported in this browser.");
+      }
+    } catch (err) {
+      console.warn("Webcam access error:", err);
+      setCameraError("Camera access permission denied or no camera device found.");
+      setIsCameraActive(false);
+    }
+  };
+
   useEffect(() => {
     startCamera();
     return () => {
       stopCamera();
     };
   }, []);
+
+  // Attach MediaStream to video element when mounted in DOM
+  useEffect(() => {
+    if (isCameraActive && stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch((e) => {
+        console.warn("Video play error notice:", e);
+      });
+    }
+  }, [isCameraActive, stream]);
 
   const takeSnapshot = () => {
     if (videoRef.current && canvasRef.current) {
@@ -92,10 +103,10 @@ export default function WebcamCapture({ onCapture, initialImage }) {
               autoPlay
               playsInline
               muted
-              className="w-full h-56 object-cover"
+              className="w-full h-56 object-cover bg-black"
             />
             {isCameraActive && (
-              <div className="absolute top-2 left-2 bg-red-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1 shadow-md">
+              <div className="absolute top-2 left-2 bg-emerald-700 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center space-x-1 shadow-md">
                 <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                 <span>LIVE WEBCAM STREAM</span>
               </div>
@@ -108,7 +119,7 @@ export default function WebcamCapture({ onCapture, initialImage }) {
               alt="Live captured snapshot"
               className="w-full h-56 object-cover"
             />
-            <div className="absolute top-2 right-2 bg-emerald-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center space-x-1 shadow-md">
+            <div className="absolute top-2 right-2 bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center space-x-1 shadow-md">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>LIVE SNAPSHOT CAPTURED</span>
             </div>
@@ -130,7 +141,7 @@ export default function WebcamCapture({ onCapture, initialImage }) {
           <button
             type="button"
             onClick={takeSnapshot}
-            className="px-5 py-2.5 bg-[#00355f] hover:bg-[#0f4c81] text-white font-bold text-xs rounded-full shadow-md flex items-center space-x-2 transition-all active:scale-95"
+            className="px-5 py-2.5 bg-[#065f46] hover:bg-emerald-800 text-white font-bold text-xs rounded-full shadow-md flex items-center space-x-2 transition-all active:scale-95"
           >
             <Camera className="w-4 h-4" />
             <span>Capture Live Photo</span>

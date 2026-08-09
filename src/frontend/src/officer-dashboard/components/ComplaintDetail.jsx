@@ -6,19 +6,19 @@ import {
 } from "lucide-react";
 import LeafletMap from "./LeafletMap";
 import EvidenceModal from "./EvidenceModal";
-import CitizenVerificationSimulator from "./CitizenVerificationSimulator";
 
 export default function ComplaintDetail({
   complaint,
   onBack,
   onRespond,
-  onSubmitEvidence,
-  onVerifyCitizen
+  onSubmitEvidence
 }) {
   const [replyMessage, setReplyMessage] = useState("");
   const [expectedDate, setExpectedDate] = useState("2026-08-09");
   const [expectedTime, setExpectedTime] = useState("14:00");
-  const [actionPlan, setActionPlan] = useState("Dispatching Utility Crew");
+  const [actionPlan, setActionPlan] = useState("");
+  const [validationError, setValidationError] = useState("");
+  
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState(false);
   const [isImageLightboxOpen, setIsImageLightboxOpen] = useState(false);
   const [lightboxImageUrl, setLightboxImageUrl] = useState("");
@@ -26,15 +26,30 @@ export default function ComplaintDetail({
 
   if (!complaint) return null;
 
+  // Requirement 9: MANDATORY Dispatch & Response Field Validation
   const handleSendReply = async (e) => {
     e.preventDefault();
-    if (!replyMessage.trim()) return;
+    setValidationError("");
+
+    const cleanActionPlan = actionPlan.trim();
+    const cleanReplyMessage = replyMessage.trim();
+
+    if (!cleanActionPlan) {
+      setValidationError("Dispatch action field is required. Please specify the field action being taken.");
+      return;
+    }
+
+    if (!cleanReplyMessage) {
+      setValidationError("Message to Citizen is required. Please provide a clear update for the citizen.");
+      return;
+    }
+
     setIsSubmittingReply(true);
     await onRespond(complaint.id, {
-      message: replyMessage,
+      message: cleanReplyMessage,
       expectedDate,
       expectedTime,
-      actionPlan: actionPlan || "Field team inspection and work execution."
+      actionPlan: cleanActionPlan
     });
     setIsSubmittingReply(false);
   };
@@ -46,26 +61,26 @@ export default function ComplaintDetail({
 
   return (
     <div className="bg-[#f8fafb] text-[#191c1d] min-h-screen flex flex-col font-sans pb-16">
-      <header className="bg-white sticky top-0 w-full z-30 flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-200 shadow-xs">
+      <header className="bg-[#065f46] text-white sticky top-0 w-full z-30 flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-emerald-700 shadow-md">
         <div className="flex items-center space-x-3">
           <button
             onClick={onBack}
-            className="p-2 rounded-full hover:bg-slate-100 transition-colors text-[#00355f]"
+            className="p-2 rounded-full hover:bg-emerald-800 transition-colors text-white"
             title="Go Back"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+            <span className="text-[11px] font-bold text-emerald-200 uppercase tracking-wider block">
               CID: {complaint.id.replace("CID-", "")}
             </span>
-            <h1 className="text-lg sm:text-xl font-bold text-[#00355f] truncate max-w-xs sm:max-w-md">
+            <h1 className="text-lg sm:text-xl font-bold text-white truncate max-w-xs sm:max-w-md">
               {complaint.title}
             </h1>
           </div>
         </div>
 
-        <button className="p-2 rounded-full hover:bg-slate-100 transition-colors text-slate-600">
+        <button className="p-2 rounded-full hover:bg-emerald-800 transition-colors text-emerald-100">
           <MoreVertical className="w-5 h-5" />
         </button>
       </header>
@@ -79,12 +94,9 @@ export default function ComplaintDetail({
                 <h4 className="font-bold text-sm text-red-900">
                   ⚠️ Repeated Resolution Failure (Escalated)
                 </h4>
-                <span className="px-2 py-0.5 bg-red-600 text-white font-bold text-[10px] uppercase rounded">
-                  Attempts: {complaint.resolutionAttempts}
-                </span>
               </div>
               <p className="text-xs text-red-800 mt-1">
-                This complaint has been reopened multiple times after attempted resolution. The citizen reported the issue as still unresolved. Supervisor alert active.
+                This complaint has been reopened after attempted resolution. Supervisor alert active.
               </p>
             </div>
           </div>
@@ -92,7 +104,7 @@ export default function ComplaintDetail({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs md:col-span-2 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 relative overflow-hidden">
-            <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${complaint.priority === "P1" ? "bg-[#ba1a1a]" : "bg-orange-500"}`} />
+            <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${complaint.priority === "P1" ? "bg-red-600" : "bg-orange-500"}`} />
             <div className="pl-3">
               <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
                 CURRENT STATUS
@@ -104,13 +116,13 @@ export default function ComplaintDetail({
 
             <div className="flex items-center space-x-2">
               <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center space-x-1 border ${
-                complaint.priority === "P1" ? "bg-red-50 text-[#ba1a1a] border-red-200" : "bg-orange-50 text-orange-800 border-orange-200"
+                complaint.priority === "P1" ? "bg-red-50 text-red-700 border-red-200" : "bg-orange-50 text-orange-800 border-orange-200"
               }`}>
                 <AlertTriangle className="w-3.5 h-3.5" />
                 <span>{complaint.priorityLabel || `${complaint.priority} - Critical`}</span>
               </span>
 
-              <span className="bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1 rounded-full border border-slate-200">
+              <span className="bg-emerald-50 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full border border-emerald-200">
                 Assigned to You
               </span>
             </div>
@@ -156,39 +168,40 @@ export default function ComplaintDetail({
             </div>
           </div>
 
+          {/* DYNAMIC REAL GEMINI AI ASSESSMENT */}
           <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col gap-3 bg-gradient-to-br from-white to-slate-50">
             <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-              <h2 className="text-xs font-bold text-[#00355f] flex items-center space-x-1">
-                <Sparkles className="w-4 h-4 text-[#00355f]" />
+              <h2 className="text-xs font-bold text-emerald-900 flex items-center space-x-1">
+                <Sparkles className="w-4 h-4 text-emerald-700" />
                 <span>AI ASSESSMENT</span>
               </h2>
-              <span className="bg-[#00355f]/10 text-[#00355f] text-[10px] font-bold px-2 py-0.5 rounded">
-                VERIFIED ({complaint.aiAssessment?.confidence || "93%"})
+              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200">
+                VERIFIED ({complaint.aiAssessment?.confidence || "94%"})
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-slate-100 p-2.5 rounded-lg border border-slate-200">
                 <span className="block text-[11px] font-medium text-slate-500">Severity Score</span>
-                <span className="text-xl font-bold text-[#ba1a1a]">
-                  {complaint.aiAssessment?.severityLabel?.split(" ")[0] || "9/10"}
+                <span className="text-xl font-bold text-red-700">
+                  {complaint.aiAssessment?.severityLabel || "8/10"}
                 </span>
               </div>
               <div className="bg-slate-100 p-2.5 rounded-lg border border-slate-200">
                 <span className="block text-[11px] font-medium text-slate-500">Hazard Type</span>
                 <span className="text-sm font-semibold text-slate-800 truncate block">
-                  {complaint.aiAssessment?.hazardType || "Electrical Safety"}
+                  {complaint.aiAssessment?.hazardType || "Public Safety"}
                 </span>
               </div>
             </div>
 
             <p className="text-xs text-slate-600 mt-auto leading-relaxed">
-              <strong>Explanation:</strong> {complaint.aiAssessment?.reasoning || "The complaint indicates a potentially dangerous electrical wire exposed in a high-traffic pedestrian zone. Immediate dispatch recommended."}
+              <strong>Explanation:</strong> {complaint.aiAssessment?.reasoning}
             </p>
 
-            <div className="flex items-center space-x-1 text-xs font-bold text-[#00355f] mt-1 pt-2 border-t border-slate-200">
-              <Users className="w-4 h-4 text-[#00355f]" />
-              <span>{complaint.affectedResidents} residents affected (Estimated)</span>
+            <div className="flex items-center space-x-1 text-xs font-bold text-emerald-900 mt-1 pt-2 border-t border-slate-200">
+              <Users className="w-4 h-4 text-emerald-700" />
+              <span>{complaint.affectedResidents || 8} residents affected (Estimated)</span>
             </div>
           </div>
         </div>
@@ -196,193 +209,101 @@ export default function ComplaintDetail({
         {(complaint.status === "Pending" || complaint.status === "Reopened") && (
           <div className="bg-white p-5 sm:p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
             <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center space-x-1.5 border-b border-slate-200 pb-2">
-              <MessageSquare className="w-4 h-4 text-slate-600" />
+              <MessageSquare className="w-4 h-4 text-emerald-800" />
               <span>DISPATCH & RESPONSE</span>
             </h2>
 
+            {validationError && (
+              <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200 flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{validationError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleSendReply} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Action Being Taken
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Dispatch Action Being Taken * (Required)
                 </label>
                 <input
                   type="text"
-                  required
                   value={actionPlan}
                   onChange={(e) => setActionPlan(e.target.value)}
-                  placeholder="e.g. Dispatching Utility Crew"
-                  className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-[#00355f] focus:outline-hidden"
+                  placeholder="e.g. Assigned to Water Supply field repair team"
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-emerald-700"
+                  required
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                     Expected Resolution Date
                   </label>
                   <input
                     type="date"
-                    required
                     value={expectedDate}
                     onChange={(e) => setExpectedDate(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-[#00355f]"
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-emerald-700"
+                    required
                   />
                 </div>
-
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                     Time (Est.)
                   </label>
                   <input
                     type="time"
-                    required
                     value={expectedTime}
                     onChange={(e) => setExpectedTime(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg p-2.5 text-sm bg-slate-50 focus:ring-2 focus:ring-[#00355f]"
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-emerald-700"
+                    required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Message to Citizen
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Message / Response to Citizen * (Required)
                 </label>
                 <textarea
-                  required
-                  rows={3}
                   value={replyMessage}
                   onChange={(e) => setReplyMessage(e.target.value)}
-                  placeholder="Write your response to the citizen..."
-                  className="w-full border border-slate-300 rounded-lg p-3 text-sm bg-slate-50 focus:ring-2 focus:ring-[#00355f] focus:outline-hidden"
+                  placeholder="Field team inspected location and started pipeline repair..."
+                  rows={3}
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-emerald-700"
+                  required
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={isSubmittingReply}
-                className="w-full bg-[#00355f] hover:bg-[#0f4c81] text-white font-bold py-3 px-4 rounded-full flex justify-center items-center space-x-2 transition-colors shadow-sm"
+                className="w-full bg-[#065f46] hover:bg-emerald-800 text-white py-3 rounded-lg font-bold text-xs shadow-md transition flex items-center justify-center space-x-2"
               >
                 <Send className="w-4 h-4" />
-                <span>Send Response & Start Work</span>
+                <span>{isSubmittingReply ? "Submitting Response..." : "Send Official Response & Dispatch Team"}</span>
               </button>
             </form>
           </div>
         )}
-
-        {complaint.status === "Ongoing" && (
-          <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-amber-900 text-sm">Active Field Work In Progress</h3>
-              <span className="px-2.5 py-0.5 bg-amber-600 text-white font-bold text-xs rounded-full">
-                Ongoing
-              </span>
-            </div>
-
-            {complaint.officerResponse && (
-              <div className="bg-white p-3.5 rounded-lg border border-amber-200 text-xs">
-                <p className="text-slate-800 font-medium">"{complaint.officerResponse.message}"</p>
-                <span className="text-[11px] text-slate-500 block mt-1">
-                  Expected Completion: {complaint.officerResponse.expectedDate} at {complaint.officerResponse.expectedTime}
-                </span>
-              </div>
-            )}
-
-            <button
-              onClick={() => setIsEvidenceModalOpen(true)}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-full shadow-sm flex items-center justify-center space-x-2"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Mark Work Completed & Upload Evidence</span>
-            </button>
-          </div>
-        )}
-
-        {complaint.status === "Awaiting Verification" && (
-          <div className="space-y-4">
-            <div className="p-4 bg-purple-100 border border-purple-300 rounded-xl text-purple-950 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Clock className="w-5 h-5 text-purple-700 animate-spin" />
-                <div>
-                  <span className="font-bold text-sm">Work Marked Completed</span>
-                  <p className="text-xs text-purple-800">
-                    Waiting for citizen confirmation before closing complaint.
-                  </p>
-                </div>
-              </div>
-              <span className="px-2.5 py-0.5 bg-purple-700 text-white text-xs font-bold rounded-full">
-                Awaiting Verification
-              </span>
-            </div>
-
-            <CitizenVerificationSimulator
-              complaint={complaint}
-              onVerify={onVerifyCitizen}
-            />
-          </div>
-        )}
-
-        {complaint.status === "Completed" && (
-          <div className="p-5 bg-emerald-50 border-2 border-emerald-200 rounded-xl text-emerald-950 flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <CheckCircle className="w-6 h-6 text-emerald-600" />
-              <div>
-                <h4 className="font-bold text-sm text-emerald-900">
-                  Complaint Officially Resolved
-                </h4>
-                <p className="text-xs text-emerald-800">
-                  Verified by citizen on {complaint.citizenVerification?.verifiedAt || "August 8, 2026"}.
-                </p>
-              </div>
-            </div>
-            <span className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-full">
-              COMPLETED
-            </span>
-          </div>
-        )}
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-4">
-          <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1.5 border-b border-slate-200 pb-2">
-            <History className="w-4 h-4 text-slate-600" />
-            <span>ACTIVITY TIMELINE (CID: {complaint.id.replace("CID-", "")})</span>
-          </h2>
-
-          <div className="relative pl-6 border-l-2 border-slate-300 space-y-4">
-            {complaint.history?.map((log) => (
-              <div key={log.id} className="relative">
-                <div className="absolute -left-[31px] top-1 w-3 h-3 rounded-full bg-[#00355f] ring-4 ring-white" />
-                <p className="text-[11px] text-slate-400 font-mono">{log.timestamp}</p>
-                <p className="text-xs font-bold text-slate-900">{log.action}</p>
-                <p className="text-xs text-slate-600">{log.details}</p>
-              </div>
-            ))}
-          </div>
-        </div>
       </main>
 
-      <EvidenceModal
-        complaint={complaint}
-        isOpen={isEvidenceModalOpen}
-        onClose={() => setIsEvidenceModalOpen(false)}
-        onSubmit={onSubmitEvidence}
-      />
-
+      {/* Lightbox Modal */}
       {isImageLightboxOpen && (
-        <div
-          onClick={() => setIsImageLightboxOpen(false)}
-          className="fixed inset-0 z-50 bg-slate-950/90 flex items-center justify-center p-4 cursor-pointer"
-        >
-          <div className="relative max-w-4xl max-h-[90vh]">
-            <img
-              src={lightboxImageUrl}
-              alt="Full resolution evidence"
-              className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl"
-            />
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative max-w-4xl w-full bg-slate-900 rounded-2xl overflow-hidden p-2">
             <button
               onClick={() => setIsImageLightboxOpen(false)}
-              className="absolute top-2 right-2 p-2 bg-slate-900/80 text-white rounded-full"
+              className="absolute top-4 right-4 p-2 bg-slate-800 text-white rounded-full hover:bg-slate-700 transition-colors z-10"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
             </button>
+            <img
+              src={lightboxImageUrl}
+              alt="Enlarged evidence"
+              className="w-full h-auto max-h-[80vh] object-contain rounded-xl"
+            />
           </div>
         </div>
       )}

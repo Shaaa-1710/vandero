@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from database import get_db
 from models import Complaint, ComplaintEscalation, OfficerPerformanceFlag, Officer
-from api.deps import get_current_user
+from api.deps import get_current_officer
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -13,7 +13,7 @@ def officer_dashboard(
     ward_id: Optional[int] = None,
     category: Optional[str] = None,
     status: Optional[str] = None,
-    current_user = Depends(get_current_user),
+    current_officer: Officer = Depends(get_current_officer),
     db: Session = Depends(get_db)
 ):
     query = db.query(Complaint)
@@ -52,58 +52,61 @@ def officer_dashboard(
 
     db.commit()
 
-    for c in complaints:
-        hours_open = (now - c.created_at).total_seconds() / 3600.0
-        overdue_boost = 100 if c.status == "Overdue" else 0
-        setattr(c, "rank_score", (c.vote_count * 10) + hours_open + overdue_boost)
+    # Requirement 8: Severity-First Sorting
+    sorted_complaints = sorted(
+        complaints,
+        key=lambda x: (x.ai_severity_score or 7, x.vote_count or 1, -x.created_at.timestamp() if x.created_at else 0),
+        reverse=True
+    )
+    return sorted_complaints
 
-    ranked_complaints = sorted(complaints, key=lambda x: getattr(x, "rank_score"), reverse=True)
-    return ranked_complaints
-
-@router.post("/complaints/{complaint_id}/update-status")
-async def update_complaint_status(
+@router.post("/complaints/{complaint_id}/respond")
+def respond_to_complaint(
     complaint_id: int,
-    status_str: str = Body(..., embed=True),
-    current_user = Depends(get_current_user),
+    action_plan: str = Body(..., embed=True),
+    expected_resolution_time: Optional[str] = Body(None, embed=True),
+    current_officer: Officer = Depends(get_current_officer),
     db: Session = Depends(get_db)
 ):
+    # Requirement 9: Mandatory Dispatch & Response Field Validation
+    if not action_plan or not action_plan.strip():
+        raise HTTPException(status_code=400, detail="Dispatch action plan is required and cannot be empty or whitespace.")
+
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
 
-    complaint.status = status_str
-    if status_str == "Resolved":
-        complaint.resolved_at = datetime.utcnow()
-        
+    complaint.status = "In Progress"
     db.commit()
 
-    return {"message": "Status updated successfully", "status": complaint.status}
+    return {"message": "Response submitted and dispatch recorded", "status": complaint.status}
 
-@router.post("/complaints/{complaint_id}/set-dates")
-def set_planned_dates(
+@router.post("/complaints/{complaint_id}/complete")
+def complete_complaint(
     complaint_id: int,
-    planned_inspection_date: Optional[str] = Body(None),
-    planned_start_date: Optional[str] = Body(None),
-    planned_fix_date: Optional[str] = Body(None),
-    current_user = Depends(get_current_user),
+    evidence_notes: str = Body(..., embed=True),
+    evidence_photo_url: Optional[str] = Body(None, embed=True),
+    current_officer: Officer = Depends(get_current_officer),
     db: Session = Depends(get_db)
 ):
+    # Requirement 9: Mandatory Response Notes Validation
+    if not evidence_notes or not evidence_notes.strip():
+        raise HTTPException(status_code=400, detail="Resolution response notes are required and cannot be empty.")
+
     complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
     if not complaint:
         raise HTTPException(status_code=404, detail="Complaint not found")
 
-    if planned_inspection_date:
-        complaint.planned_inspection_date = datetime.fromisoformat(planned_inspection_date)
-    if planned_start_date:
-        complaint.planned_start_date = datetime.fromisoformat(planned_start_date)
-    if planned_fix_date:
-        complaint.planned_fix_date = datetime.fromisoformat(planned_fix_date)
-
+    complaint.status = "Awaiting Verification"
     db.commit()
-    return {"message": "Planned dates updated successfully"}
+
+    return {"message": "Completion evidence submitted for citizen verification", "status": complaint.status}
 
 @router.get("/performance-flags")
-def get_performance_flags(db: Session = Depends(get_db)):
+def get_performance_flags(
+    current_officer: Officer = Depends(get_current_officer),
+    db: Session = Depends(get_db)
+):
     flags = db.query(OfficerPerformanceFlag).all()
     result = []
     for f in flags:

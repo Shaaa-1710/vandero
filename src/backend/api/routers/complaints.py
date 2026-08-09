@@ -6,15 +6,16 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Complaint, ComplaintVote, Department, Ward, User
 from api.deps import get_current_user
-from services.ai_service import detect_semantic_duplicate, validate_photo_with_gemini
+from services.ai_service import (
+    detect_semantic_duplicate,
+    validate_photo_with_gemini,
+    analyze_complaint_severity_and_hazard
+)
 from services.cloudinary_service import upload_image
 
 router = APIRouter(prefix="/complaints", tags=["complaints"])
 
 def get_department_for_complaint(category: str, description: str, db: Session) -> Optional[int]:
-    """
-    Intelligently maps complaint category and description text to official municipal departments.
-    """
     text = (category + " " + description).lower()
     
     if any(k in text for k in ["street light", "lighting", "lamp", "electrical", "electricity", "wire", "pole"]):
@@ -39,11 +40,9 @@ def get_department_for_complaint(category: str, description: str, db: Session) -
         dept = db.query(Department).filter(Department.name.ilike("%Drain%")).first()
         if dept: return dept.id
 
-    # Default fallback lookup
     dept = db.query(Department).filter(Department.name.ilike(f"%{category}%")).first()
     if dept: return dept.id
 
-    # Fallback to first department
     first_dept = db.query(Department).first()
     return first_dept.id if first_dept else None
 
@@ -68,8 +67,20 @@ def get_complaints(
             query = query.filter(Complaint.department_id == dept.id)
         
     complaints = query.all()
-    # Sort primarily by vote_count descending, then time open
-    sorted_complaints = sorted(complaints, key=lambda x: (x.vote_count, x.created_at), reverse=True)
+
+    # Requirement 8: Severity-First Priority Sorting Order
+    # 1. AI Severity Score (10 > 1)
+    # 2. Vote Count (Desc)
+    # 3. Created Timestamp (Asc / Oldest waiting time first)
+    sorted_complaints = sorted(
+        complaints,
+        key=lambda x: (
+            x.ai_severity_score or 7,
+            x.vote_count or 1,
+            -x.created_at.timestamp() if x.created_at else 0
+        ),
+        reverse=True
+    )
     return sorted_complaints
 
 @router.post("/precheck-duplicate")
@@ -104,25 +115,44 @@ async def create_complaint(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # Requirement 5: Strict Backend Pin Location Validation
+    if not location_lat or not location_lng or location_lat == 0.0 or location_lng == 0.0:
+        raise HTTPException(
+            status_code=400,
+            detail="Location coordinates are required. Please mark the complaint location on the map before submitting."
+        )
+
+    # Fetch open complaints in the ward for 200m Haversine & Semantic AI duplicate check
     open_nearby = db.query(Complaint).filter(
         Complaint.ward_id == ward_id,
         Complaint.status.in_(["Open", "In Progress", "Overdue"])
     ).all()
     
     nearby_list = [
-        {"id": c.id, "category": c.category, "description": c.description, "street": c.street}
+        {
+            "id": c.id,
+            "category": c.category,
+            "description": c.description,
+            "street": c.street,
+            "lat": c.location_lat,
+            "lng": c.location_lng,
+            "vote_count": c.vote_count
+        }
         for c in open_nearby
     ]
     
+    # Requirements 6 & 7: 200m Proximity + Semantic AI Duplicate Check
     if nearby_list:
         try:
-            dup_result = detect_semantic_duplicate(description, nearby_list)
+            dup_result = detect_semantic_duplicate(description, location_lat, location_lng, nearby_list)
             if dup_result.get("is_duplicate"):
                 raise HTTPException(
                     status_code=400,
                     detail={
-                        "message": "Already reported — please upvote the existing complaint.",
+                        "message": "Your related complaint has already been raised by someone. Please upvote the existing complaint instead.",
                         "existing_complaint_id": dup_result.get("existing_complaint_id"),
+                        "existing_complaint_votes": dup_result.get("existing_complaint_votes", 1),
+                        "existing_complaint_location": dup_result.get("existing_complaint_location", street),
                         "reason": dup_result.get("reason")
                     }
                 )
@@ -147,8 +177,8 @@ async def create_complaint(
             
         photo_url = upload_image(photo_bytes)
 
-    # Intelligently resolve municipal department ID
     dept_id = get_department_for_complaint(category, description, db)
+    ai_result = analyze_complaint_severity_and_hazard(category, description)
 
     new_complaint = Complaint(
         ward_id=ward_id,
@@ -167,6 +197,9 @@ async def create_complaint(
         pincode=pincode,
         landmark=landmark,
         photo_url=photo_url,
+        ai_severity_score=ai_result.get("severity_score", 7),
+        ai_hazard_type=ai_result.get("hazard_type", "Public Hazard"),
+        ai_explanation=ai_result.get("explanation", f"AI verified complaint regarding {category}."),
         vote_count=1,
         status="Open",
         escalation_due_at=datetime.utcnow() + timedelta(days=14)
