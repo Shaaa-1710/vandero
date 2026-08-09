@@ -125,7 +125,7 @@ function LandingLoginPage({ onLoginSuccess, onOpenTrackComplaint }) {
   };
 
   return (
-    <div className="relative min-h-[calc(100vh-64px)] flex items-center justify-center bg-slate-950 overflow-y-auto font-sans py-4 sm:py-8">
+    <div className="relative min-h-[calc(100vh-64px)] flex items-start sm:items-center justify-center bg-slate-950 overflow-y-auto font-sans pt-6 pb-12 sm:py-8">
       
       {/* Background Image */}
       <div 
@@ -137,10 +137,10 @@ function LandingLoginPage({ onLoginSuccess, onOpenTrackComplaint }) {
       <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900/90 to-emerald-950/80" />
 
       {/* Main Container */}
-      <div className="relative z-10 max-w-6xl mx-auto px-3.5 sm:px-6 w-full grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-center">
+      <div className="relative z-10 max-w-6xl mx-auto px-3.5 sm:px-6 w-full grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-start lg:items-center">
         
-        {/* RIGHT COLUMN: LOGIN / REGISTER CARD (Positioned FIRST on mobile via order-first lg:order-last) */}
-        <div className="lg:col-span-5 w-full order-first lg:order-last">
+        {/* RIGHT COLUMN: LOGIN / REGISTER CARD (Positioned FIRST on mobile, padded safely below header) */}
+        <div className="lg:col-span-5 w-full order-first lg:order-last mt-1 sm:mt-0">
           <div className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-emerald-100 p-4 sm:p-6 md:p-8">
             
             {/* Top Switcher: Citizen Portal vs Officer Portal */}
