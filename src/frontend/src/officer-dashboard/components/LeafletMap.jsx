@@ -26,12 +26,22 @@ const createCustomIcon = (status, priority) => {
   });
 };
 
-const RecenterMap = ({ lat, lng }) => {
+const MapLifecycleHandler = ({ lat, lng }) => {
   const map = useMap();
   useEffect(() => {
     if (lat && lng) {
       map.setView([lat, lng], 15);
+      setTimeout(() => map.invalidateSize(), 200);
     }
+
+    const handleResize = () => map.invalidateSize();
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
   }, [lat, lng, map]);
   return null;
 };
@@ -41,7 +51,7 @@ export default function LeafletMap({ lat = 11.0168, lng = 76.9558, address = "",
   const customIcon = createCustomIcon(status, priority);
 
   return (
-    <div className="w-full h-48 md:h-56 rounded-lg overflow-hidden border border-slate-200 shadow-xs relative">
+    <div className="w-full h-44 sm:h-52 md:h-56 rounded-xl overflow-hidden border border-slate-200 shadow-xs relative z-10">
       <MapContainer
         center={position}
         zoom={15}
@@ -54,7 +64,7 @@ export default function LeafletMap({ lat = 11.0168, lng = 76.9558, address = "",
         />
         <Marker position={position} icon={customIcon}>
           <Popup>
-            <div className="p-1 max-w-xs text-xs">
+            <div className="p-1 max-w-[80vw] sm:max-w-xs text-xs">
               <strong className="block text-slate-900 text-sm mb-1">{title}</strong>
               <p className="text-slate-600 mb-1">{address}</p>
               <span className="inline-block px-1.5 py-0.5 rounded font-bold text-[10px] text-white bg-slate-800">
@@ -63,7 +73,7 @@ export default function LeafletMap({ lat = 11.0168, lng = 76.9558, address = "",
             </div>
           </Popup>
         </Marker>
-        <RecenterMap lat={lat} lng={lng} />
+        <MapLifecycleHandler lat={lat} lng={lng} />
       </MapContainer>
     </div>
   );

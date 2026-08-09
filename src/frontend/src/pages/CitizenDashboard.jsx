@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Navigation, Plus, ThumbsUp, AlertCircle, MapPin, CheckCircle, Clock, Map as MapIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { Search, Navigation, Plus, ThumbsUp, AlertCircle, MapPin, CheckCircle, Clock, Map as MapIcon, ChevronUp, ChevronDown, ListFilter } from 'lucide-react';
 import Map from '../components/Map';
 import client from '../api/client';
 
@@ -7,6 +7,9 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
   const [searchQuery, setSearchQuery] = useState('');
   const [loadingSearch, setLoadingSearch] = useState(false);
   const [searchAlertMessage, setSearchAlertMessage] = useState('');
+  
+  // Mobile Bottom Sheet Panel State
+  const [isMobileListOpen, setIsMobileListOpen] = useState(false);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -42,7 +45,6 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
         const lat = parseFloat(top.lat);
         const lng = parseFloat(top.lon);
 
-        // Find nearest ward or retain selected
         if (wards && wards.length > 0) {
           const nearestWard = wards[0];
           setSelectedWard(nearestWard);
@@ -90,33 +92,54 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
   return (
     <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-64px)] relative overflow-hidden bg-gray-100 font-sans">
       
-      {/* Sidebar: Area Complaints & Controls */}
-      <div className="w-full md:w-96 bg-white border-r shadow-lg flex flex-col z-20 h-full">
+      {/* DESKTOP & MOBILE SIDEBAR / BOTTOM SHEET */}
+      <div className={`w-full md:w-96 bg-white border-r shadow-lg flex flex-col z-30 transition-all duration-300 ${
+        isMobileListOpen 
+          ? "fixed inset-x-0 bottom-0 top-16 md:relative md:top-0 h-[calc(100vh-64px)]" 
+          : "h-auto md:h-full"
+      }`}>
         
-        {/* Search Bar & Location Controls */}
-        <div className="p-4 border-b bg-emerald-50/50 space-y-3">
+        {/* Mobile Collapsible Header Bar (Visible on Mobile Only) */}
+        <div 
+          onClick={() => setIsMobileListOpen(!isMobileListOpen)}
+          className="md:hidden bg-[#065f46] text-white px-4 py-2.5 flex items-center justify-between cursor-pointer border-b border-emerald-700 select-none"
+        >
+          <div className="flex items-center space-x-2">
+            <ListFilter className="w-4 h-4 text-emerald-300" />
+            <span className="font-bold text-xs">
+              {selectedWard ? `${selectedWard.ward_number} - ${selectedWard.name}` : 'Coimbatore Complaints'} ({complaints.length})
+            </span>
+          </div>
+          <div className="flex items-center space-x-1 text-xs font-semibold bg-emerald-800 px-2 py-0.5 rounded border border-emerald-600">
+            <span>{isMobileListOpen ? "Hide List" : "Show Complaints"}</span>
+            {isMobileListOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+          </div>
+        </div>
+
+        {/* Search Bar & Location Controls (Always Visible on Desktop, Visible when expanded on mobile) */}
+        <div className={`p-3.5 sm:p-4 border-b bg-emerald-50/50 space-y-3 ${isMobileListOpen ? 'block' : 'hidden md:block'}`}>
           <form onSubmit={handleSearch} className="flex space-x-2">
             <div className="relative flex-1">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search street, ward or landmark (e.g. RS Puram)..."
-                className="w-full border border-gray-300 rounded-md pl-9 pr-3 py-2 text-xs focus:ring-2 focus:ring-emerald-600 focus:outline-none bg-white"
+                placeholder="Search street, ward or landmark..."
+                className="w-full border border-gray-300 rounded-lg pl-8 sm:pl-9 pr-2.5 py-2 text-xs focus:ring-2 focus:ring-emerald-600 focus:outline-none bg-white"
               />
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+              <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
             </div>
             <button
               type="submit"
               disabled={loadingSearch}
-              className="bg-[#065f46] hover:bg-emerald-800 text-white px-3.5 py-2 rounded-md text-xs font-bold shadow transition"
+              className="bg-[#065f46] hover:bg-emerald-800 text-white px-3 sm:px-3.5 py-2 rounded-lg text-xs font-bold shadow-xs transition shrink-0"
             >
-              {loadingSearch ? 'Searching...' : 'Search'}
+              {loadingSearch ? '...' : 'Search'}
             </button>
           </form>
 
           {searchAlertMessage && (
-            <div className="p-2 bg-emerald-100 border border-emerald-300 rounded text-[11px] text-emerald-900 font-semibold">
+            <div className="p-2 bg-emerald-100 border border-emerald-300 rounded-lg text-[11px] text-emerald-900 font-semibold">
               ✨ {searchAlertMessage}
             </div>
           )}
@@ -124,38 +147,38 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
           <div className="flex space-x-2">
             <button
               onClick={handleGeolocation}
-              className="flex-1 bg-white border border-emerald-300 text-emerald-900 hover:bg-emerald-50 px-3 py-1.5 rounded-md text-xs font-semibold flex items-center justify-center space-x-1 shadow-sm transition"
+              className="flex-1 bg-white border border-emerald-300 text-emerald-900 hover:bg-emerald-50 px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold flex items-center justify-center space-x-1 shadow-2xs transition"
             >
-              <Navigation className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Use GPS Location</span>
+              <Navigation className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+              <span className="truncate">GPS Location</span>
             </button>
 
             <button
               onClick={handleNewComplaintClick}
-              className={`flex-1 px-3 py-1.5 rounded-md text-xs font-bold flex items-center justify-center space-x-1 shadow transition ${
+              className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold flex items-center justify-center space-x-1 shadow-xs transition ${
                 pinLocation 
-                  ? "bg-[#065f46] hover:bg-emerald-800 text-white ring-2 ring-emerald-400"
+                  ? "bg-[#065f46] hover:bg-emerald-800 text-white ring-2 ring-emerald-400/50"
                   : "bg-amber-600 hover:bg-amber-700 text-white animate-pulse"
               }`}
             >
-              <Plus className="w-4 h-4" />
-              <span>+ New Complaint</span>
+              <Plus className="w-4 h-4 shrink-0" />
+              <span className="truncate">+ New Complaint</span>
             </button>
           </div>
         </div>
 
-        {/* Selected Ward Info Banner */}
-        <div className="bg-[#065f46] text-white px-4 py-2 flex items-center justify-between text-xs border-b border-emerald-700">
-          <span className="font-bold">
+        {/* Selected Ward Info Banner (Desktop Only) */}
+        <div className="hidden md:flex bg-[#065f46] text-white px-4 py-2 items-center justify-between text-xs border-b border-emerald-700">
+          <span className="font-bold truncate">
             {selectedWard ? `${selectedWard.ward_number} - ${selectedWard.name}` : 'Coimbatore Ward 1'}
           </span>
-          <span className="text-[11px] text-emerald-200 font-semibold">
+          <span className="text-[11px] text-emerald-200 font-semibold shrink-0">
             {complaints.length} Open Reports
           </span>
         </div>
 
         {/* Sidebar Complaint List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className={`flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3 ${isMobileListOpen ? 'block' : 'hidden md:block'}`}>
           <div className="flex justify-between items-center mb-2">
             <h3 className="font-bold text-xs uppercase text-gray-500 tracking-wider">
               Ranked Area Complaints
@@ -173,11 +196,11 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
             complaints.map(c => (
               <div 
                 key={c.id} 
-                className="bg-white p-3.5 rounded-lg border border-gray-200 shadow-sm hover:shadow transition space-y-2"
+                className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs hover:shadow-xs transition space-y-2"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <span className="font-bold text-gray-900 text-xs line-clamp-1">{c.category}</span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
                     c.status === 'Resolved' ? 'bg-green-100 text-green-800' :
                     c.status === 'Overdue' ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'
                   }`}>
@@ -196,7 +219,7 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
                   <img 
                     src={c.photo_url} 
                     alt="Live Photo" 
-                    className="w-full h-24 object-cover rounded border border-gray-100 mt-1"
+                    className="w-full h-24 object-cover rounded-lg border border-gray-100 mt-1"
                   />
                 )}
 
@@ -206,7 +229,7 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
                   </span>
                   <button
                     onClick={() => onUpvote(c.id)}
-                    className="bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 font-semibold px-3 py-1 rounded text-xs flex items-center space-x-1 transition shadow-sm"
+                    className="bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 font-semibold px-3 py-1 rounded-lg text-xs flex items-center space-x-1 transition shadow-2xs"
                   >
                     <ThumbsUp className="w-3.5 h-3.5 text-emerald-700" />
                     <span>Upvote Issue</span>
@@ -220,43 +243,64 @@ function CitizenDashboard({ wards, selectedWard, setSelectedWard, complaints, se
       </div>
 
       {/* Main Area: Map View (Always Visible) */}
-      <div className="flex-1 h-full relative">
+      <div className="flex-1 h-full relative z-10">
         <Map 
           wards={wards}
           complaints={complaints}
           selectedWard={selectedWard}
-          onSelectLocation={(lat, lng) => setPinLocation({ lat, lng })}
+          onSelectLocation={(lat, lng) => {
+            setPinLocation({ lat, lng });
+            if (isMobileListOpen) setIsMobileListOpen(false);
+          }}
           onUpvote={onUpvote}
           pinLocation={pinLocation}
         />
 
         {/* STRICT REQUIRED MAP PIN BANNER */}
-        <div className={`absolute top-4 left-4 right-4 md:left-auto md:right-4 z-20 p-3 rounded-xl shadow-xl backdrop-blur-md flex items-center justify-between border ${
+        <div className={`absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 md:left-auto md:right-4 z-20 p-2.5 sm:p-3 rounded-xl shadow-xl backdrop-blur-md flex items-center justify-between border ${
           pinLocation 
             ? "bg-emerald-900/90 text-white border-emerald-500/40" 
             : "bg-amber-600/95 text-white border-amber-400 animate-pulse"
         }`}>
-          <div className="flex items-center space-x-2">
-            <MapPin className="w-5 h-5 shrink-0 text-white" />
+          <div className="flex items-center space-x-2 pr-2">
+            <MapPin className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 text-white" />
             <div>
               <p className="font-bold text-xs sm:text-sm">
                 {pinLocation 
                   ? `📍 Location Marked (${pinLocation.lat.toFixed(4)}, ${pinLocation.lng.toFixed(4)})` 
                   : "⚠️ Map Pin Required: Click on the map to mark complaint location."}
               </p>
-              <p className="text-[11px] text-white/90">
+              <p className="text-[10px] sm:text-[11px] text-white/90 hidden xs:block">
                 {pinLocation 
                   ? "Ready to post complaint! Click '+ New Complaint' to proceed." 
-                  : "Strict constraint: You cannot submit a complaint without marking the exact location pin."}
+                  : "Strict constraint: You cannot submit a complaint without marking the location pin."}
               </p>
             </div>
           </div>
-          {pinLocation && (
-            <span className="ml-3 bg-white text-emerald-900 font-extrabold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider">
+          {pinLocation ? (
+            <span className="bg-white text-emerald-900 font-extrabold text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
               Pin Set
             </span>
+          ) : (
+            <button
+              onClick={handleNewComplaintClick}
+              className="bg-white text-amber-900 font-bold text-[10px] px-2 py-1 rounded-md uppercase shrink-0 shadow-xs"
+            >
+              Mark Pin
+            </button>
           )}
         </div>
+
+        {/* Mobile Toggle Button on Map when Collapsed */}
+        {!isMobileListOpen && (
+          <button
+            onClick={() => setIsMobileListOpen(true)}
+            className="md:hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-20 bg-[#065f46] text-white px-4 py-2 rounded-full font-bold text-xs shadow-2xl border border-emerald-400 flex items-center space-x-2"
+          >
+            <ListFilter className="w-4 h-4" />
+            <span>View {complaints.length} Nearby Complaints</span>
+          </button>
+        )}
       </div>
 
     </div>

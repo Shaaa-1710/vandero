@@ -41,10 +41,14 @@ function Map({ wards, complaints, selectedWard, onSelectLocation, onUpvote, pinL
   useEffect(() => {
     if (!leafletMapRef.current && mapRef.current) {
       // Default to Coimbatore center
-      const map = L.map(mapRef.current).setView([11.0168, 76.9558], 13);
+      const map = L.map(mapRef.current, {
+        zoomControl: true,
+        tap: true
+      }).setView([11.0168, 76.9558], 13);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
       }).addTo(map);
 
       map.on('click', (e) => {
@@ -55,6 +59,26 @@ function Map({ wards, complaints, selectedWard, onSelectLocation, onUpvote, pinL
 
       leafletMapRef.current = map;
     }
+
+    const handleResize = () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.invalidateSize();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+    const observer = new ResizeObserver(() => handleResize());
+    if (mapRef.current) {
+      observer.observe(mapRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+      observer.disconnect();
+    };
   }, []);
 
   // Update Ward GeoJSON Layers
@@ -103,12 +127,12 @@ function Map({ wards, complaints, selectedWard, onSelectLocation, onUpvote, pinL
         }).addTo(map);
 
         const popupContent = document.createElement('div');
-        popupContent.className = 'p-1 font-sans text-xs max-w-xs';
+        popupContent.className = 'p-1 font-sans text-xs max-w-[80vw] sm:max-w-xs';
         popupContent.innerHTML = `
           <div class="font-bold text-sm text-gray-900 mb-1">${complaint.category}</div>
-          <p class="text-gray-700 mb-2">${complaint.description}</p>
+          <p class="text-gray-700 mb-2 line-clamp-3">${complaint.description}</p>
           <div class="flex items-center justify-between text-gray-500 mb-2 border-t pt-1">
-            <span>📍 ${complaint.street}</span>
+            <span class="truncate">📍 ${complaint.street}</span>
             <span class="px-1.5 py-0.5 rounded font-semibold text-[10px] ${
               complaint.status === 'Resolved' ? 'bg-green-100 text-green-800' :
               complaint.status === 'Overdue' ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'
@@ -122,7 +146,7 @@ function Map({ wards, complaints, selectedWard, onSelectLocation, onUpvote, pinL
           </div>
         `;
 
-        marker.bindPopup(popupContent);
+        marker.bindPopup(popupContent, { maxWidth: 300 });
         
         marker.on('popupopen', () => {
           const btn = document.getElementById(`upvote-btn-${complaint.id}`);
@@ -169,7 +193,7 @@ function Map({ wards, complaints, selectedWard, onSelectLocation, onUpvote, pinL
 
   return (
     <div className="w-full h-full relative">
-      <div ref={mapRef} className="w-full h-full min-h-[450px] z-10" />
+      <div ref={mapRef} className="w-full h-full min-h-[350px] sm:min-h-[450px] z-10" />
     </div>
   );
 }
